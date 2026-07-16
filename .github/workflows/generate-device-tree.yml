@@ -16,8 +16,18 @@ on:
         required: true
         type: string
       api_level:
-        description: 'API 级别（如 22 对应安卓 5.1）'
-        required: true
+        description: 'API 级别（如 22 对应安卓 5.1，不填则默认 22）'
+        required: false
+        type: string
+        default: '22'
+      push_to_repo:
+        description: '是否推送到独立仓库'
+        required: false
+        type: boolean
+        default: false
+      repo_name:
+        description: '目标仓库名称（如 android_device_xiaomi_beryllium）'
+        required: false
         type: string
 
 env:
@@ -40,10 +50,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cpio
-          pip install --upgrade twrpdtgen
-
-      - name: Show twrpdtgen help (debug)
-        run: python -m twrpdtgen -h
+          pip install twrpdtgen
 
       - name: Download image
         run: |
@@ -64,8 +71,8 @@ jobs:
           name: device-tree-${{ github.event.inputs.device_codename }}
           path: ${{ env.OUTPUT_DIR }}/
 
-      - name: Create release
-        if: github.event.inputs.push_to_repo != 'true'
+      - name: Create release (if not pushing to repo)
+        if: ${{ !github.event.inputs.push_to_repo }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: device-tree-${{ github.event.inputs.device_codename }}-${{ github.run_number }}
@@ -80,7 +87,7 @@ jobs:
             ${{ env.OUTPUT_DIR }}/*
 
       - name: Push to separate repository
-        if: github.event.inputs.push_to_repo == 'true' && github.event.inputs.repo_name != ''
+        if: ${{ github.event.inputs.push_to_repo && github.event.inputs.repo_name != '' }}
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
