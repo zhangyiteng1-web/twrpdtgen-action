@@ -3,46 +3,28 @@ import sys
 import argparse
 from pathlib import Path
 
-# ========== Monkey patch fingerprint_to_description 以处理错误格式 ==========
-from sebaubuntu_libs.libandroid.props import utils
-
-original_fingerprint_to_description = utils.fingerprint_to_description
-
-def safe_fingerprint_to_description(fingerprint):
-    """安全版本，解析失败时返回默认描述"""
-    if not fingerprint:
-        return "unknown-user 1.0.0 release-keys"
-    try:
-        # 尝试解析，如果格式不对，则返回默认
-        parts = fingerprint.split('/')
-        if len(parts) >= 2:
-            # 取最后一部分作为 build number? 具体逻辑不知道，但可以返回一个简单的
-            # 这里我们简单地返回一个默认值
-            return "user 1.0.0 release-keys"
-        else:
-            return "user 1.0.0 release-keys"
-    except Exception:
-        return "user 1.0.0 release-keys"
-
-utils.fingerprint_to_description = safe_fingerprint_to_description
-
-# 现在再导入 DeviceInfo 和 DeviceTree
+# ========== Monkey patch DeviceInfo 以处理缺失的属性 ==========
 from sebaubuntu_libs.libandroid.device_info import DeviceInfo
-from twrpdtgen.device_tree import DeviceTree
-# ==========================================================================
 
 _PATCH_API_LEVEL = None
 _PATCH_MANUFACTURER = None
 _PATCH_CODENAME = None
 
 def get_default_props(api_level, manufacturer, codename):
-    """生成可能缺失的 build.prop 属性默认值"""
+    """生成所有可能缺失的 build.prop 属性默认值"""
     desc = f"{codename}-user {api_level}.0.0 release-keys"
+    # CPU ABI 列表（常见组合）
+    cpu_abilist = "arm64-v8a,armeabi-v7a,armeabi"
+    cpu_abilist32 = "armeabi-v7a,armeabi"
+    cpu_abilist64 = "arm64-v8a"
+    
     defaults = {
+        # 制造商
         'ro.product.manufacturer': manufacturer,
         'ro.product.vendor.manufacturer': manufacturer,
         'ro.product.system.manufacturer': manufacturer,
         'ro.product.board': manufacturer,
+        # 代号
         'ro.product.device': codename,
         'ro.product.vendor.device': codename,
         'ro.product.system.device': codename,
@@ -52,14 +34,28 @@ def get_default_props(api_level, manufacturer, codename):
         'ro.product.model': codename,
         'ro.product.vendor.model': codename,
         'ro.product.system.model': codename,
+        # API
         'ro.product.first_api_level': str(api_level),
         'ro.build.version.sdk': str(api_level),
+        # 描述
         'ro.build.description': desc,
         'ro.system.build.description': desc,
         'ro.vendor.build.description': desc,
         'ro.build.display.id': desc,
         'ro.system.build.display.id': desc,
         'ro.vendor.build.display.id': desc,
+        # CPU ABI（覆盖多种变体）
+        'ro.product.cpu.abilist': cpu_abilist,
+        'ro.product.cpu.abilist32': cpu_abilist32,
+        'ro.product.cpu.abilist64': cpu_abilist64,
+        'ro.vendor.product.cpu.abilist': cpu_abilist,
+        'ro.vendor.product.cpu.abilist32': cpu_abilist32,
+        'ro.vendor.product.cpu.abilist64': cpu_abilist64,
+        'ro.system.product.cpu.abilist': cpu_abilist,
+        'ro.system.product.cpu.abilist32': cpu_abilist32,
+        'ro.system.product.cpu.abilist64': cpu_abilist64,
+        'ro.board.platform': manufacturer,  # 有时用
+        # 其他
         'ro.build.version.release': str(api_level),
         'ro.build.date': 'Mon Jan 1 00:00:00 UTC 2024',
         'ro.build.date.utc': '1704067200',
@@ -71,6 +67,11 @@ def get_default_props(api_level, manufacturer, codename):
         'ro.system.build.version.release': str(api_level),
         'ro.vendor.build.version.sdk': str(api_level),
         'ro.vendor.build.version.release': str(api_level),
+        # 添加可能的其他属性，避免未来再报错
+        'ro.product.locale': 'en-US',
+        'ro.wifi.channels': '',
+        'ro.telephony.default_network': '9',
+        'persist.radio.multisim.config': '',
     }
     return defaults
 
@@ -78,13 +79,20 @@ original_device_info_init = DeviceInfo.__init__
 
 def patched_device_info_init(self, build_prop):
     global _PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME
+    
     defaults = get_default_props(_PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME)
     for key, value in defaults.items():
         if key not in build_prop:
             build_prop[key] = value
+    
+    # 调用原始初始化
     original_device_info_init(self, build_prop)
 
 DeviceInfo.__init__ = patched_device_info_init
+
+# 现在导入 DeviceTree
+from twrpdtgen.device_tree import DeviceTree
+# ==========================================================================
 
 def main():
     global _PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME
