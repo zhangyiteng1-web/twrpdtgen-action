@@ -8,25 +8,24 @@ on:
         required: true
         type: string
       device_manufacturer:
-        description: '设备制造商（如 xiaomi）'
+        description: '设备制造商（小写）'
         required: true
         type: string
       device_codename:
-        description: '设备代号（如 beryllium）'
+        description: '设备代号（小写）'
         required: true
         type: string
       api_level:
         description: 'API 级别（如 22 对应安卓 5.1，33 对应安卓 13）'
-        required: false
+        required: true
         type: string
-        default: '22'
       push_to_repo:
-        description: '是否推送到独立仓库'
+        description: '是否推送到独立仓库（勾选后若未填写 repo_name 则自动生成标准名称）'
         required: false
         type: boolean
         default: false
       repo_name:
-        description: '目标仓库名称（如 android_device_xiaomi_beryllium）'
+        description: '目标仓库名称（可选，留空则自动生成 android_device_{制造商}_{代号}）'
         required: false
         type: string
 
@@ -94,17 +93,61 @@ jobs:
             ${{ env.OUTPUT_DIR }}/*
 
       - name: Push to separate repository
-        if: ${{ github.event.inputs.push_to_repo && github.event.inputs.repo_name != '' }}
+        if: ${{ github.event.inputs.push_to_repo }}
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
+          MANUFACTURER="${{ github.event.inputs.device_manufacturer }}"
+          CODENAME="${{ github.event.inputs.device_codename }}"
+          API_LEVEL="${{ github.event.inputs.api_level }}"
+          
+          # 确定目标仓库名称
+          if [ -n "${{ github.event.inputs.repo_name }}" ]; then
+            REPO_NAME="${{ github.event.inputs.repo_name }}"
+          else
+            REPO_NAME="android_device_${MANUFACTURER}_${CODENAME}"
+          fi
+          
+          # 根据 API 级别确定分支
+          if [ "$API_LEVEL" -ge "33" ]; then
+            BRANCH="android-13.0"
+          elif [ "$API_LEVEL" -ge "31" ]; then
+            BRANCH="android-12.1"
+          elif [ "$API_LEVEL" -ge "30" ]; then
+            BRANCH="android-11.0"
+          else
+            BRANCH="android-10.0"
+          fi
+          
+          # 检查仓库是否存在，若不存在则创建
+          echo "检查仓库 $REPO_NAME 是否存在..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${{ github.repository_owner }}/${REPO_NAME}")
+          
+          if [ "$HTTP_STATUS" -eq 404 ]; then
+            echo "仓库不存在，正在创建..."
+            curl -X POST \
+              -H "Authorization: token ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/user/repos" \
+              -d "{\"name\":\"${REPO_NAME}\",\"description\":\"TWRP device tree for ${MANUFACTURER} ${CODENAME}\",\"private\":false,\"auto_init\":false}"
+            echo "仓库创建成功！"
+          else
+            echo "仓库已存在，继续推送..."
+          fi
+          
+          # 准备设备树文件
           TEMP_DIR=$(mktemp -d)
-          cp -r ${{ env.OUTPUT_DIR }}/* $TEMP_DIR/
+          cp -r ${{ env.OUTPUT_DIR }}/${MANUFACTURER}/${CODENAME}/* $TEMP_DIR/
+          
           cd $TEMP_DIR
           git init
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
           git add .
-          git commit -m "Auto-generated device tree for ${{ github.event.inputs.device_codename }}"
-          git remote add origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}.git
-          git push -f origin main || git push -f origin master
+          git commit -m "Auto-generated TWRP device tree for ${CODENAME}"
+          
+          git remote add origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository_owner }}/${REPO_NAME}.git
+          git push -f origin HEAD:${BRANCH}
