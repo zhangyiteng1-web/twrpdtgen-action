@@ -10,28 +10,67 @@ _PATCH_API_LEVEL = None
 _PATCH_MANUFACTURER = None
 _PATCH_CODENAME = None
 
+def get_default_props(api_level, manufacturer, codename):
+    """生成可能缺失的 build.prop 属性默认值"""
+    # 构建一个合理的描述字符串
+    desc = f"{codename}-user {api_level} {api_level}.0.0 release-keys"
+    fingerprint = f"{manufacturer}/{codename}/{codename}:{api_level}/{desc}/user/release-keys"
+    
+    defaults = {
+        # 制造商
+        'ro.product.manufacturer': manufacturer,
+        'ro.product.vendor.manufacturer': manufacturer,
+        'ro.product.system.manufacturer': manufacturer,
+        'ro.product.board': manufacturer,
+        # 代号
+        'ro.product.device': codename,
+        'ro.product.vendor.device': codename,
+        'ro.product.system.device': codename,
+        'ro.product.name': codename,
+        'ro.product.vendor.name': codename,
+        'ro.product.system.name': codename,
+        'ro.product.model': codename,
+        'ro.product.vendor.model': codename,
+        'ro.product.system.model': codename,
+        # API
+        'ro.product.first_api_level': str(api_level),
+        'ro.build.version.sdk': str(api_level),
+        # 描述
+        'ro.build.description': desc,
+        'ro.system.build.description': desc,
+        'ro.vendor.build.description': desc,
+        'ro.build.display.id': desc,
+        'ro.system.build.display.id': desc,
+        'ro.vendor.build.display.id': desc,
+        # fingerprint
+        'ro.build.fingerprint': fingerprint,
+        'ro.system.build.fingerprint': fingerprint,
+        'ro.vendor.build.fingerprint': fingerprint,
+        # 其他可能缺失的
+        'ro.build.version.release': str(api_level),  # 有时需要
+        'ro.build.date': 'Mon Jan 1 00:00:00 UTC 2024',  # 占位
+        'ro.build.date.utc': '1704067200',
+        'ro.build.type': 'user',
+        'ro.build.user': 'android-build',
+        'ro.build.host': 'android-host',
+        'ro.build.tags': 'release-keys',
+        'ro.system.build.version.sdk': str(api_level),
+        'ro.system.build.version.release': str(api_level),
+        'ro.vendor.build.version.sdk': str(api_level),
+        'ro.vendor.build.version.release': str(api_level),
+    }
+    return defaults
+
 original_device_info_init = DeviceInfo.__init__
 
 def patched_device_info_init(self, build_prop):
     global _PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME
     
-    # 补全所有可能缺失的属性
-    if _PATCH_API_LEVEL is not None:
-        build_prop['ro.product.first_api_level'] = str(_PATCH_API_LEVEL)
-    if _PATCH_MANUFACTURER is not None:
-        build_prop['ro.product.manufacturer'] = _PATCH_MANUFACTURER
-        build_prop['ro.product.vendor.manufacturer'] = _PATCH_MANUFACTURER
-        build_prop['ro.product.system.manufacturer'] = _PATCH_MANUFACTURER
-        build_prop['ro.product.board'] = _PATCH_MANUFACTURER  # 某些版本可能需要
-    if _PATCH_CODENAME is not None:
-        build_prop['ro.product.device'] = _PATCH_CODENAME
-        build_prop['ro.product.vendor.device'] = _PATCH_CODENAME
-        build_prop['ro.product.system.device'] = _PATCH_CODENAME
-        build_prop['ro.product.name'] = _PATCH_CODENAME
-        build_prop['ro.product.vendor.name'] = _PATCH_CODENAME
-        build_prop['ro.product.system.name'] = _PATCH_CODENAME
-        build_prop['ro.product.model'] = _PATCH_CODENAME  # 有时用 model
-        build_prop['ro.product.vendor.model'] = _PATCH_CODENAME
+    # 获取默认属性并注入
+    defaults = get_default_props(_PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME)
+    for key, value in defaults.items():
+        if key not in build_prop:
+            build_prop[key] = value
     
     # 调用原始初始化
     original_device_info_init(self, build_prop)
@@ -61,7 +100,6 @@ def main():
         print(f"错误: 镜像文件不存在: {args.image}")
         sys.exit(1)
 
-    # 设置全局变量供 patch 使用
     _PATCH_API_LEVEL = args.api_level if args.api_level else '22'
     _PATCH_MANUFACTURER = args.manufacturer
     _PATCH_CODENAME = args.codename
