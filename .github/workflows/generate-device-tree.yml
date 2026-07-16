@@ -21,7 +21,7 @@ on:
         type: string
         default: '22'
       push_to_repo:
-        description: '是否推送到独立仓库'
+        description: '是否推送到独立仓库（勾选后需填写 repo_name）'
         required: false
         type: boolean
         default: false
@@ -49,14 +49,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cpio
+          sudo apt-get install -y cpio aria2
           pip install twrpdtgen
 
-      - name: Download image
+      - name: Download image with aria2
         run: |
           mkdir -p images
-          wget -O images/input.img "${{ github.event.inputs.image_url }}"
-          echo "Image downloaded successfully."
+          aria2c -x 16 -s 16 -k 1M \
+                 --max-tries=10 \
+                 --retry-wait=5 \
+                 --timeout=120 \
+                 --continue=true \
+                 -o images/input.img \
+                 "${{ github.event.inputs.image_url }}"
 
       - name: Generate device tree
         run: |
