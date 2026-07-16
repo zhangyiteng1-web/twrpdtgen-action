@@ -10,9 +10,9 @@ _global_api_level = '22'
 _global_manufacturer = 'unknown'
 _global_codename = 'unknown'
 
-def patched_get_first_prop(self, props, raise_exception=True):
+def patched_get_first_prop(self, props, *args, **kwargs):
     """
-    安全地获取属性，如果缺失则返回默认值，忽略 raise_exception 参数
+    安全地获取属性，如果缺失则返回默认值，忽略所有额外参数
     """
     if not isinstance(props, (list, tuple)):
         props = [props]
@@ -37,14 +37,13 @@ def patched_get_first_prop(self, props, raise_exception=True):
         if 'description' in prop_lower or 'display.id' in prop_lower:
             return f"{_global_codename}-user {_global_api_level}.0.0 release-keys"
     
-    # 如果 raise_exception=True 且没有匹配到，原始方法会抛异常，
-    # 但我们选择返回空字符串以保证流程继续
+    # 若未匹配任何已知模式，返回空字符串（保证不抛出异常）
     return ''
 
 # 替换原方法
 DeviceInfo.get_first_prop = patched_get_first_prop
 
-# 现在导入 DeviceTree
+# 现在导入 DeviceTree（必须在 patch 之后）
 from twrpdtgen.device_tree import DeviceTree
 # ==========================================================================
 
