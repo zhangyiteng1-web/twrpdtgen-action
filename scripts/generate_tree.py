@@ -28,9 +28,9 @@ def main():
     output_dir = Path(args.output) / args.manufacturer / args.codename
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 构建 twrpdtgen 命令
+    # 使用 python -m 方式调用 twrpdtgen
     cmd = [
-        "twrpdtgen",
+        "python", "-m", "twrpdtgen",
         "-i", str(image_path),
         "-o", str(output_dir),
         "--manufacturer", args.manufacturer,
