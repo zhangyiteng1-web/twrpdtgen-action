@@ -37,7 +37,8 @@
 | `image_url` | ✅ | 镜像文件的直链下载地址 | `https://example.com/recovery.img` |
 | `device_manufacturer` | ✅ | 设备制造商（小写） | `xiaomi` / `realme` |
 | `device_codename` | ✅ | 设备代号（小写） | `beryllium` / `RMX3031CN` |
-| `api_level` | ✅ | **API 级别**（必须正确填写，否则生成可能失败） |
+| `api_level` | ✅ | **API 级别**（必须正确填写，否则生成可能失败） | |参考https://juejin.cn/post/7444452134135693349
+API Level列表
 | `push_to_repo` | ❌ | 是否推送到独立仓库（勾选后需填写或留空 `repo_name`） | 勾选/不勾选 |
 | `repo_name` | ❌ | 目标仓库名称（如 `android_device_xiaomi_beryllium`）<br>**留空则自动按标准生成** `android_device_{制造商}_{代号}` | 可选 |
 
