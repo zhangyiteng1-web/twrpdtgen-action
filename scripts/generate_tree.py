@@ -3,7 +3,6 @@
 使用 twrpdtgen 从 boot/recovery 镜像生成 TWRP 设备树
 """
 
-import os
 import sys
 import argparse
 from pathlib import Path
@@ -42,22 +41,22 @@ def main():
 
     args = parser.parse_args()
 
-    # 检查镜像文件是否存在
-    if not os.path.exists(args.image):
+    # 使用 Path 对象
+    image_path = Path(args.image)
+    if not image_path.is_file():
         print(f"错误: 镜像文件不存在: {args.image}")
         sys.exit(1)
 
-    # 构建输出路径: output/manufacturer/codename
     output_path = Path(args.output) / args.manufacturer / args.codename
     output_path.mkdir(parents=True, exist_ok=True)
 
-    print(f"正在处理镜像: {args.image}")
+    print(f"正在处理镜像: {image_path}")
     print(f"输出目录: {output_path}")
 
     try:
-        # 创建 DeviceTree 对象并生成设备树
-        device_tree = DeviceTree(args.image)
-        device_tree.dump_to_folder(str(output_path))
+        # 直接传入 Path 对象
+        device_tree = DeviceTree(image_path)
+        device_tree.dump_to_folder(output_path)
         print(f"✅ 设备树已成功生成: {output_path}")
     except Exception as e:
         print(f"❌ 生成失败: {e}")
