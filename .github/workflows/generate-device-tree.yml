@@ -8,20 +8,20 @@ on:
         required: true
         type: string
       device_manufacturer:
-        description: '设备制造商（仅用于标识）'
+        description: '设备制造商（如 xiaomi）'
         required: true
         type: string
       device_codename:
-        description: '设备代号（仅用于标识）'
+        description: '设备代号（如 beryllium）'
         required: true
         type: string
       api_level:
-        description: 'API 级别（如 22 对应安卓 5.1，不填则默认 22）'
+        description: 'API 级别（如 22 对应安卓 5.1，33 对应安卓 13）'
         required: false
         type: string
         default: '22'
       push_to_repo:
-        description: '是否推送到独立仓库（勾选后需填写 repo_name）'
+        description: '是否推送到独立仓库'
         required: false
         type: boolean
         default: false
@@ -68,7 +68,9 @@ jobs:
           python scripts/generate_tree.py \
             --image images/input.img \
             --output ${{ env.OUTPUT_DIR }} \
-            --api-level ${{ github.event.inputs.api_level }}
+            --api-level ${{ github.event.inputs.api_level }} \
+            --manufacturer "${{ github.event.inputs.device_manufacturer }}" \
+            --codename "${{ github.event.inputs.device_codename }}"
 
       - name: Upload device tree as artifact
         uses: actions/upload-artifact@v4
