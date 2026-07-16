@@ -12,10 +12,7 @@ _PATCH_CODENAME = None
 
 def get_default_props(api_level, manufacturer, codename):
     """生成可能缺失的 build.prop 属性默认值"""
-    # 构建一个合理的描述字符串
-    desc = f"{codename}-user {api_level} {api_level}.0.0 release-keys"
-    fingerprint = f"{manufacturer}/{codename}/{codename}:{api_level}/{desc}/user/release-keys"
-    
+    desc = f"{codename}-user {api_level}.0.0 release-keys"
     defaults = {
         # 制造商
         'ro.product.manufacturer': manufacturer,
@@ -35,20 +32,16 @@ def get_default_props(api_level, manufacturer, codename):
         # API
         'ro.product.first_api_level': str(api_level),
         'ro.build.version.sdk': str(api_level),
-        # 描述
+        # 描述（不设置 fingerprint，避免解析错误）
         'ro.build.description': desc,
         'ro.system.build.description': desc,
         'ro.vendor.build.description': desc,
         'ro.build.display.id': desc,
         'ro.system.build.display.id': desc,
         'ro.vendor.build.display.id': desc,
-        # fingerprint
-        'ro.build.fingerprint': fingerprint,
-        'ro.system.build.fingerprint': fingerprint,
-        'ro.vendor.build.fingerprint': fingerprint,
-        # 其他可能缺失的
-        'ro.build.version.release': str(api_level),  # 有时需要
-        'ro.build.date': 'Mon Jan 1 00:00:00 UTC 2024',  # 占位
+        # 其他
+        'ro.build.version.release': str(api_level),
+        'ro.build.date': 'Mon Jan 1 00:00:00 UTC 2024',
         'ro.build.date.utc': '1704067200',
         'ro.build.type': 'user',
         'ro.build.user': 'android-build',
@@ -66,18 +59,16 @@ original_device_info_init = DeviceInfo.__init__
 def patched_device_info_init(self, build_prop):
     global _PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME
     
-    # 获取默认属性并注入
     defaults = get_default_props(_PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME)
     for key, value in defaults.items():
         if key not in build_prop:
             build_prop[key] = value
     
-    # 调用原始初始化
     original_device_info_init(self, build_prop)
 
 DeviceInfo.__init__ = patched_device_info_init
 
-# 现在再导入 DeviceTree
+# 现在导入 DeviceTree
 from twrpdtgen.device_tree import DeviceTree
 # ==========================================================================
 
