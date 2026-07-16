@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
 """
-使用 twrpdtgen Python API 从 boot/recovery 镜像生成 TWRP 设备树
-手动补全 build.prop 中缺失的属性（如 first_api_level）
+使用 twrpdtgen 命令行生成 TWRP 设备树
 """
 
 import sys
 import argparse
+import subprocess
 from pathlib import Path
-
-try:
-    from twrpdtgen.device_tree import DeviceTree
-except ImportError:
-    print("错误: 请先安装 twrpdtgen: pip install twrpdtgen")
-    sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(
-        description="从 boot/recovery 镜像生成 TWRP 设备树 (Python API)"
+        description="从 boot/recovery 镜像生成 TWRP 设备树（调用 twrpdtgen 命令行）"
     )
     parser.add_argument("--image", required=True, help="boot.img 或 recovery.img 的路径")
-    parser.add_argument("--output", required=True, help="输出目录")
-    parser.add_argument("--manufacturer", required=True, help="设备制造商 (如: xiaomi)")
-    parser.add_argument("--codename", required=True, help="设备代号 (如: beryllium)")
-    parser.add_argument("--api-level", required=True, help="API 级别 (如 22)")
+    parser.add_argument("--output", required=True, help="输出根目录（twrpdtgen 会自动创建 manufacturer/codename 子目录）")
+    parser.add_argument("--api-level", required=True, help="API 级别（如 22）")
+    # 制造商和代号不再需要，twrpdtgen 会自动从镜像中提取
+    parser.add_argument("--manufacturer", required=False, help="（忽略，仅作兼容）")
+    parser.add_argument("--codename", required=False, help="（忽略，仅作兼容）")
 
     args = parser.parse_args()
 
@@ -31,40 +26,27 @@ def main():
         print(f"错误: 镜像文件不存在: {args.image}")
         sys.exit(1)
 
-    output_dir = Path(args.output) / args.manufacturer / args.codename
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_root = Path(args.output)
+    output_root.mkdir(parents=True, exist_ok=True)
 
-    print(f"正在处理镜像: {image_path}")
-    print(f"输出目录: {output_dir}")
+    # 构建 twrpdtgen 命令：只使用 -o 和 --api-level，位置参数为镜像
+    cmd = [
+        "python", "-m", "twrpdtgen",
+        "-o", str(output_root),
+        "--api-level", args.api_level,
+        str(image_path)
+    ]
 
-    try:
-        # 1. 创建 DeviceTree 对象（自动解析镜像）
-        device_tree = DeviceTree(image_path)
+    print("运行命令:", " ".join(cmd))
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
-        # 2. 获取内部 build.prop 字典
-        build_prop = device_tree.build_prop
-
-        # 3. 强制设置制造商和代号（防止自动识别错误）
-        build_prop['ro.product.manufacturer'] = args.manufacturer
-        build_prop['ro.product.vendor.manufacturer'] = args.manufacturer
-        build_prop['ro.product.device'] = args.codename
-        build_prop['ro.product.name'] = args.codename
-        build_prop['ro.product.vendor.device'] = args.codename
-
-        # 4. 如果缺少 first_api_level，使用用户提供的值
-        if 'ro.product.first_api_level' not in build_prop:
-            print(f"build.prop 缺少 ro.product.first_api_level，手动添加为 {args.api_level}")
-            build_prop['ro.product.first_api_level'] = args.api_level
-
-        # 5. 生成设备树文件
-        device_tree.dump_to_folder(output_dir)
-        print(f"✅ 设备树已成功生成: {output_dir}")
-
-    except Exception as e:
-        print(f"❌ 生成失败: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    if result.returncode != 0:
+        print("❌ 生成失败!")
+        print("错误输出:", result.stderr)
+        sys.exit(result.returncode)
+    else:
+        print(result.stdout)
+        print(f"✅ 设备树已成功生成在 {output_root} 下的子目录中")
 
 if __name__ == "__main__":
     main()
