@@ -15,6 +15,10 @@ on:
         description: '设备代号（如：beryllium、crownlte）'
         required: true
         type: string
+      api_level:
+        description: 'API 级别（如：29 对应 Android 10，可查 https://source.android.com/docs/setup/start/build-numbers）'
+        required: true
+        type: string
       push_to_repo:
         description: '是否将生成的设备树推送到新仓库'
         required: false
@@ -59,7 +63,8 @@ jobs:
             --image images/input.img \
             --output ${{ env.OUTPUT_DIR }} \
             --manufacturer "${{ github.event.inputs.device_manufacturer }}" \
-            --codename "${{ github.event.inputs.device_codename }}"
+            --codename "${{ github.event.inputs.device_codename }}" \
+            --api-level "${{ github.event.inputs.api_level }}"
 
       - name: Upload device tree as artifact
         uses: actions/upload-artifact@v4
@@ -76,6 +81,7 @@ jobs:
           body: |
             ## 自动生成的 TWRP 设备树
             - **设备**: ${{ github.event.inputs.device_manufacturer }} ${{ github.event.inputs.device_codename }}
+            - **API 级别**: ${{ github.event.inputs.api_level }}
             - **生成时间**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
             - **工具**: twrpdtgen
           files: |
@@ -86,7 +92,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # 创建临时目录
           TEMP_DIR=$(mktemp -d)
           cp -r ${{ env.OUTPUT_DIR }}/* $TEMP_DIR/
           
@@ -95,10 +100,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 添加所有文件
           git add .
           git commit -m "Auto-generated device tree for ${{ github.event.inputs.device_codename }}"
           
-          # 推送到目标仓库
           git remote add origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}.git
           git push -f origin main || git push -f origin master
