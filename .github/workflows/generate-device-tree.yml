@@ -1,0 +1,104 @@
+name: Generate TWRP Device Tree
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: 'boot.img 或 recovery.img 的直链下载地址'
+        required: true
+        type: string
+      device_manufacturer:
+        description: '设备制造商（如：xiaomi、samsung、oneplus）'
+        required: true
+        type: string
+      device_codename:
+        description: '设备代号（如：beryllium、crownlte）'
+        required: true
+        type: string
+      push_to_repo:
+        description: '是否将生成的设备树推送到新仓库'
+        required: false
+        type: boolean
+        default: false
+      repo_name:
+        description: '目标仓库名称（如：android_device_xiaomi_beryllium）'
+        required: false
+        type: string
+
+env:
+  OUTPUT_DIR: output
+
+jobs:
+  generate-tree:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cpio
+          pip install twrpdtgen
+
+      - name: Download image
+        run: |
+          mkdir -p images
+          wget -O images/input.img "${{ github.event.inputs.image_url }}"
+          echo "Image downloaded successfully."
+
+      - name: Generate device tree
+        run: |
+          python scripts/generate_tree.py \
+            --image images/input.img \
+            --output ${{ env.OUTPUT_DIR }} \
+            --manufacturer "${{ github.event.inputs.device_manufacturer }}" \
+            --codename "${{ github.event.inputs.device_codename }}"
+
+      - name: Upload device tree as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-tree-${{ github.event.inputs.device_codename }}
+          path: ${{ env.OUTPUT_DIR }}/
+
+      - name: Create release
+        if: github.event.inputs.push_to_repo != 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: device-tree-${{ github.event.inputs.device_codename }}-${{ github.run_number }}
+          name: "Device Tree for ${{ github.event.inputs.device_codename }}"
+          body: |
+            ## 自动生成的 TWRP 设备树
+            - **设备**: ${{ github.event.inputs.device_manufacturer }} ${{ github.event.inputs.device_codename }}
+            - **生成时间**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            - **工具**: twrpdtgen
+          files: |
+            ${{ env.OUTPUT_DIR }}/*
+
+      - name: Push to separate repository
+        if: github.event.inputs.push_to_repo == 'true' && github.event.inputs.repo_name != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          # 创建临时目录
+          TEMP_DIR=$(mktemp -d)
+          cp -r ${{ env.OUTPUT_DIR }}/* $TEMP_DIR/
+          
+          cd $TEMP_DIR
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 添加所有文件
+          git add .
+          git commit -m "Auto-generated device tree for ${{ github.event.inputs.device_codename }}"
+          
+          # 推送到目标仓库
+          git remote add origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository_owner }}/${{ github.event.inputs.repo_name }}.git
+          git push -f origin main || git push -f origin master
