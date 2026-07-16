@@ -3,25 +3,19 @@ import sys
 import argparse
 from pathlib import Path
 
-# ========== Monkey patch: 让 get_first_prop 在属性缺失时返回默认值 ==========
+# ========== Monkey patch DeviceInfo.get_first_prop ==========
 from sebaubuntu_libs.libandroid.device_info import DeviceInfo
 
-_global_api_level = '22'
+_global_api_level = None
 _global_manufacturer = 'unknown'
 _global_codename = 'unknown'
 
 def patched_get_first_prop(self, props, *args, **kwargs):
-    """
-    安全地获取属性，如果缺失则返回默认值，忽略所有额外参数
-    """
     if not isinstance(props, (list, tuple)):
         props = [props]
-    # 先检查 build_prop 中是否存在
     for prop in props:
         if prop in self.build_prop:
             return self.build_prop[prop]
-    
-    # 属性缺失，根据属性名生成智能默认值
     for prop in props:
         prop_lower = prop.lower()
         if 'security_patch' in prop_lower:
@@ -36,15 +30,36 @@ def patched_get_first_prop(self, props, *args, **kwargs):
             return _global_api_level
         if 'description' in prop_lower or 'display.id' in prop_lower:
             return f"{_global_codename}-user {_global_api_level}.0.0 release-keys"
-    
-    # 若未匹配任何已知模式，返回空字符串（保证不抛出异常）
     return ''
 
-# 替换原方法
 DeviceInfo.get_first_prop = patched_get_first_prop
 
-# 现在导入 DeviceTree（必须在 patch 之后）
+# ========== Monkey patch DeviceTree.__init__ 处理 fstab 缺失 ==========
 from twrpdtgen.device_tree import DeviceTree
+from sebaubuntu_libs.libandroid.fstab import Fstab
+
+original_device_tree_init = DeviceTree.__init__
+
+def patched_device_tree_init(self, image):
+    try:
+        original_device_tree_init(self, image)
+    except AssertionError as e:
+        if str(e) == "fstab not found":
+            self.fstab = Fstab()
+            if not hasattr(self.fstab, 'entries'):
+                self.fstab.entries = []
+            from twrpdtgen.device_tree import INIT_RC_LOCATIONS
+            self.init_rcs = []
+            for init_rc_path in [self.image_info.ramdisk / location for location in INIT_RC_LOCATIONS]:
+                if not init_rc_path.is_dir():
+                    continue
+                self.init_rcs += [init_rc for init_rc in init_rc_path.iterdir()
+                                  if init_rc.name.endswith(".rc") and init_rc.name != "init.rc"]
+            return
+        else:
+            raise
+
+DeviceTree.__init__ = patched_device_tree_init
 # ==========================================================================
 
 def main():
@@ -54,8 +69,7 @@ def main():
     )
     parser.add_argument("--image", required=True, help="boot.img 或 recovery.img 路径")
     parser.add_argument("--output", required=True, help="输出根目录")
-    parser.add_argument("--api-level", required=False, default=None,
-                        help="API 级别（如 22），不提供则默认 22")
+    parser.add_argument("--api-level", required=True, help="API 级别（如 22）")
     parser.add_argument("--manufacturer", required=True, help="设备制造商")
     parser.add_argument("--codename", required=True, help="设备代号")
 
@@ -66,7 +80,7 @@ def main():
         print(f"错误: 镜像文件不存在: {args.image}")
         sys.exit(1)
 
-    _global_api_level = args.api_level if args.api_level else '22'
+    _global_api_level = args.api_level
     _global_manufacturer = args.manufacturer
     _global_codename = args.codename
     print(f"使用的 API 级别: {_global_api_level}")
