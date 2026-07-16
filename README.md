@@ -53,3 +53,85 @@
 ---
 
 ## 目录结构（生成结果示例）
+output/
+└── realme/
+└── RMX3031CN/
+├── Android.bp
+├── Android.mk
+├── AndroidProducts.mk
+├── BoardConfig.mk
+├── README.md
+├── device.mk
+├── extract-files.sh
+├── omni_RMX3031CN.mk
+├── recovery.fstab
+├── setup-makefiles.sh
+├── vendorsetup.sh
+├── prebuilt/
+│ └── kernel # 若存在
+└── recovery/
+└── root/
+└── *.rc # init 脚本
+这些文件可直接用于 TWRP 编译。
+
+---
+
+## 配置独立仓库推送（可选）
+
+若想将生成的设备树自动推送到另一个仓库（如 `android_device_xiaomi_beryllium`），需要额外配置：
+
+1. **生成 Personal Access Token (classic)**：
+   - GitHub Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token
+   - 勾选 `repo` 权限，生成并复制 Token。
+
+2. **添加到 Secrets**：
+   - 在**本仓库**的 Settings → Secrets and variables → Actions 中，添加一个 Repository secret：
+     - Name: `GH_PAT`
+     - Secret: 粘贴你的 Token。
+
+3. **运行 Workflow 时**：
+   - 勾选 `push_to_repo`
+   - 在 `repo_name` 中填写目标仓库名称（如 `android_device_xiaomi_beryllium`），该仓库应**预先创建**（可为空）。
+
+---
+
+## 注意事项
+
+- **镜像大小**：GitHub Actions 免费仓库有存储限制，建议镜像不超过 50MB，若过大可考虑压缩或使用其他云存储。
+- **运行时限制**：每个 Action 运行时间不超过 6 小时，通常足够完成生成。
+- **API 级别**：务必正确填写，否则可能影响生成的设备树兼容性。可参考 [Android 版本对照表](https://source.android.com/docs/setup/start/build-numbers)。
+- **fstab 缺失**：部分镜像可能不包含 `recovery.fstab`，脚本会自动创建空 fstab，您可能需要后续手动补充。
+- **内核提取**：若镜像包含内核，会自动复制到 `prebuilt/kernel`；若不包含，则需手动添加。
+- **强制推送**：若启用独立仓库推送，原仓库内容会被 **强制覆盖**（`git push -f`），建议使用空仓库或备份。
+
+---
+
+## 常见问题
+
+**Q: 生成失败，提示 `fstab not found`？**  
+A: 脚本已自动处理，会生成占位 fstab，但仍建议你根据设备实际分区手动完善 `recovery.fstab`。
+
+**Q: 为什么我的 Android 13 镜像生成失败？**  
+A: 脚本已通过 monkey patch 兼容 Android 13 缺失的属性（如 `security_patch`、`cpu.abilist` 等）。若仍报错，请提 Issue 并附上完整日志。
+
+**Q: 下载镜像很慢或失败？**  
+A: 已使用 `aria2` 多线程下载，并启用断点续传。如果持续失败，尝试更换直链（如使用 GitHub Releases 或 CloudFlare R2）。
+
+**Q: 生成后的设备树还需要修改吗？**  
+A: 可能需要根据实际情况调整 `BoardConfig.mk` 中的分区大小、内核配置等，但基础框架已完备。
+
+---
+
+## 致谢 & 许可证
+
+- 本项目基于 [twrpdtgen](https://github.com/twrpdtgen/twrpdtgen) 开发，感谢原作者的优秀工作。
+- 遵循 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) 许可证。
+
+---
+
+## 贡献
+
+欢迎提交 Issue 或 PR，帮助改进本项目。若发现新问题或有改进建议，请反馈。
+
+---
+Enjoy! 🎉
