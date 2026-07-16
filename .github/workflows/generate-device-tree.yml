@@ -8,15 +8,15 @@ on:
         required: true
         type: string
       device_manufacturer:
-        description: '设备制造商（如 xiaomi，用于标识，脚本会自动检测）'
+        description: '设备制造商（仅用于标识，脚本会自动检测）'
         required: true
         type: string
       device_codename:
-        description: '设备代号（如 beryllium，用于标识，脚本会自动检测）'
+        description: '设备代号（仅用于标识，脚本会自动检测）'
         required: true
         type: string
       api_level:
-        description: 'API 级别（如 22 对应安卓 5.1，必填）'
+        description: 'API 级别（如 22 对应安卓 5.1）'
         required: true
         type: string
 
@@ -40,7 +40,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cpio
-          pip install --upgrade twrpdtgen   # 确保最新版
+          pip install twrpdtgen==1.3.0   # 强制安装支持 --api-level 的版本
+
+      - name: Verify twrpdtgen version
+        run: python -m twrpdtgen --version   # 显示版本，用于调试
 
       - name: Download image
         run: |
@@ -54,7 +57,6 @@ jobs:
             --image images/input.img \
             --output ${{ env.OUTPUT_DIR }} \
             --api-level ${{ github.event.inputs.api_level }}
-        # 忽略 --manufacturer 和 --codename，由 twrpdtgen 自动识别
 
       - name: Upload device tree as artifact
         uses: actions/upload-artifact@v4
