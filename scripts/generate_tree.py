@@ -3,99 +3,50 @@ import sys
 import argparse
 from pathlib import Path
 
-# ========== Monkey patch DeviceInfo 以处理缺失的属性 ==========
+# ========== Monkey patch: 让 get_first_prop 在属性缺失时返回默认值 ==========
 from sebaubuntu_libs.libandroid.device_info import DeviceInfo
 
-_PATCH_API_LEVEL = None
-_PATCH_MANUFACTURER = None
-_PATCH_CODENAME = None
+_global_api_level = '22'
+_global_manufacturer = 'unknown'
+_global_codename = 'unknown'
 
-def get_default_props(api_level, manufacturer, codename):
-    """生成所有可能缺失的 build.prop 属性默认值"""
-    desc = f"{codename}-user {api_level}.0.0 release-keys"
-    # CPU ABI 列表（常见组合）
-    cpu_abilist = "arm64-v8a,armeabi-v7a,armeabi"
-    cpu_abilist32 = "armeabi-v7a,armeabi"
-    cpu_abilist64 = "arm64-v8a"
-    
-    defaults = {
-        # 制造商
-        'ro.product.manufacturer': manufacturer,
-        'ro.product.vendor.manufacturer': manufacturer,
-        'ro.product.system.manufacturer': manufacturer,
-        'ro.product.board': manufacturer,
-        # 代号
-        'ro.product.device': codename,
-        'ro.product.vendor.device': codename,
-        'ro.product.system.device': codename,
-        'ro.product.name': codename,
-        'ro.product.vendor.name': codename,
-        'ro.product.system.name': codename,
-        'ro.product.model': codename,
-        'ro.product.vendor.model': codename,
-        'ro.product.system.model': codename,
-        # API
-        'ro.product.first_api_level': str(api_level),
-        'ro.build.version.sdk': str(api_level),
-        # 描述
-        'ro.build.description': desc,
-        'ro.system.build.description': desc,
-        'ro.vendor.build.description': desc,
-        'ro.build.display.id': desc,
-        'ro.system.build.display.id': desc,
-        'ro.vendor.build.display.id': desc,
-        # CPU ABI（覆盖多种变体）
-        'ro.product.cpu.abilist': cpu_abilist,
-        'ro.product.cpu.abilist32': cpu_abilist32,
-        'ro.product.cpu.abilist64': cpu_abilist64,
-        'ro.vendor.product.cpu.abilist': cpu_abilist,
-        'ro.vendor.product.cpu.abilist32': cpu_abilist32,
-        'ro.vendor.product.cpu.abilist64': cpu_abilist64,
-        'ro.system.product.cpu.abilist': cpu_abilist,
-        'ro.system.product.cpu.abilist32': cpu_abilist32,
-        'ro.system.product.cpu.abilist64': cpu_abilist64,
-        'ro.board.platform': manufacturer,  # 有时用
-        # 其他
-        'ro.build.version.release': str(api_level),
-        'ro.build.date': 'Mon Jan 1 00:00:00 UTC 2024',
-        'ro.build.date.utc': '1704067200',
-        'ro.build.type': 'user',
-        'ro.build.user': 'android-build',
-        'ro.build.host': 'android-host',
-        'ro.build.tags': 'release-keys',
-        'ro.system.build.version.sdk': str(api_level),
-        'ro.system.build.version.release': str(api_level),
-        'ro.vendor.build.version.sdk': str(api_level),
-        'ro.vendor.build.version.release': str(api_level),
-        # 添加可能的其他属性，避免未来再报错
-        'ro.product.locale': 'en-US',
-        'ro.wifi.channels': '',
-        'ro.telephony.default_network': '9',
-        'persist.radio.multisim.config': '',
-    }
-    return defaults
+# 保存原始方法
+original_get_first_prop = DeviceInfo.get_first_prop
 
-original_device_info_init = DeviceInfo.__init__
+def patched_get_first_prop(self, props):
+    """如果属性不存在，返回合理的默认值，而不是抛出异常"""
+    if not isinstance(props, (list, tuple)):
+        props = [props]
+    for prop in props:
+        if prop in self.build_prop:
+            return self.build_prop[prop]
+    # 属性缺失，根据属性名生成默认值
+    for prop in props:
+        prop_lower = prop.lower()
+        if 'security_patch' in prop_lower:
+            return '2024-01-01'
+        if 'abi' in prop_lower:
+            return 'arm64-v8a,armeabi-v7a,armeabi'
+        if 'manufacturer' in prop_lower:
+            return _global_manufacturer
+        if 'device' in prop_lower or 'name' in prop_lower or 'model' in prop_lower:
+            return _global_codename
+        if 'api_level' in prop_lower or 'sdk' in prop_lower:
+            return _global_api_level
+        if 'description' in prop_lower or 'display.id' in prop_lower:
+            return f"{_global_codename}-user {_global_api_level}.0.0 release-keys"
+        # 其他未知属性返回空字符串
+        return ''
+    return ''
 
-def patched_device_info_init(self, build_prop):
-    global _PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME
-    
-    defaults = get_default_props(_PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME)
-    for key, value in defaults.items():
-        if key not in build_prop:
-            build_prop[key] = value
-    
-    # 调用原始初始化
-    original_device_info_init(self, build_prop)
-
-DeviceInfo.__init__ = patched_device_info_init
+DeviceInfo.get_first_prop = patched_get_first_prop
 
 # 现在导入 DeviceTree
 from twrpdtgen.device_tree import DeviceTree
 # ==========================================================================
 
 def main():
-    global _PATCH_API_LEVEL, _PATCH_MANUFACTURER, _PATCH_CODENAME
+    global _global_api_level, _global_manufacturer, _global_codename
     parser = argparse.ArgumentParser(
         description="从 boot/recovery 镜像生成 TWRP 设备树（自动处理缺失属性）"
     )
@@ -113,11 +64,11 @@ def main():
         print(f"错误: 镜像文件不存在: {args.image}")
         sys.exit(1)
 
-    _PATCH_API_LEVEL = args.api_level if args.api_level else '22'
-    _PATCH_MANUFACTURER = args.manufacturer
-    _PATCH_CODENAME = args.codename
-    print(f"使用的 API 级别: {_PATCH_API_LEVEL}")
-    print(f"制造商: {_PATCH_MANUFACTURER}, 代号: {_PATCH_CODENAME}")
+    _global_api_level = args.api_level if args.api_level else '22'
+    _global_manufacturer = args.manufacturer
+    _global_codename = args.codename
+    print(f"使用的 API 级别: {_global_api_level}")
+    print(f"制造商: {_global_manufacturer}, 代号: {_global_codename}")
 
     output_root = Path(args.output)
     output_root.mkdir(parents=True, exist_ok=True)
