@@ -147,6 +147,7 @@ A: 修改工作流中创建仓库 API 的 `"private"` 字段为 `true`。
 ## 贡献
 
 欢迎提交 Issue 或 PR，帮助改进本项目。若发现新问题或有改进建议，请反馈。
-
+https://github.com/zhangyiteng1-web/
+https://deepseek.com
 ---
 Enjoy! 🎉
