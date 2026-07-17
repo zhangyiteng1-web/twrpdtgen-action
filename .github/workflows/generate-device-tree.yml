@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       api_level:
-        description: 'API 级别（必填，如 22 对应安卓 5.1，33 对应安卓 13）'
+        description: 'API 级别（必填，如 22 对应安卓 5.1）'
         required: true
         type: string
       push_to_repo:
@@ -97,31 +97,39 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # 获取输入（用于仓库名）
+          # 获取输入
           MANUFACTURER="${{ github.event.inputs.device_manufacturer }}"
           CODENAME="${{ github.event.inputs.device_codename }}"
           API_LEVEL="${{ github.event.inputs.api_level }}"
           
-          # 确定目标仓库名称（若未指定则自动生成）
+          # 确定目标仓库名称
           if [ -n "${{ github.event.inputs.repo_name }}" ]; then
             REPO_NAME="${{ github.event.inputs.repo_name }}"
           else
-            # 清理空格和特殊字符，转为小写
             CLEAN_MANUFACTURER=$(echo "$MANUFACTURER" | tr ' ' '_' | tr '[:upper:]' '[:lower:]')
             CLEAN_CODENAME=$(echo "$CODENAME" | tr ' ' '_' | tr '[:upper:]' '[:lower:]')
             REPO_NAME="android_device_${CLEAN_MANUFACTURER}_${CLEAN_CODENAME}"
           fi
           
-          # 根据 API 级别确定分支
-          if [ "$API_LEVEL" -ge "33" ]; then
-            BRANCH="android-13.0"
-          elif [ "$API_LEVEL" -ge "31" ]; then
-            BRANCH="android-12.1"
-          elif [ "$API_LEVEL" -ge "30" ]; then
-            BRANCH="android-11.0"
-          else
-            BRANCH="android-10.0"
-          fi
+          # ----- 根据 API 级别精确映射到 Android 版本分支 -----
+          # 定义映射表（API -> 版本）
+          case $API_LEVEL in
+            19|20|21) BRANCH="android-4.4" ;;
+            22)       BRANCH="android-5.1" ;;
+            23)       BRANCH="android-6.0" ;;
+            24)       BRANCH="android-7.0" ;;
+            25)       BRANCH="android-7.1" ;;
+            26)       BRANCH="android-8.0" ;;
+            27)       BRANCH="android-8.1" ;;
+            28)       BRANCH="android-9.0" ;;
+            29)       BRANCH="android-10.0" ;;
+            30)       BRANCH="android-11.0" ;;
+            31)       BRANCH="android-12.0" ;;
+            32)       BRANCH="android-12.1" ;;
+            33)       BRANCH="android-13.0" ;;
+            *)        BRANCH="android-${API_LEVEL}" ;;  # 未知 API 直接使用 android-<数字>
+          esac
+          echo "使用的分支: ${BRANCH}"
           
           # 检查并创建仓库
           echo "检查仓库 ${REPO_NAME} 是否存在..."
@@ -145,7 +153,6 @@ jobs:
           OUTPUT_DIR="${{ env.OUTPUT_DIR }}"
           echo "查找 ${OUTPUT_DIR} 下生成的设备树目录..."
           
-          # 查找所有 manufacturer 子目录下的第一级子目录（代号），取最新的
           DEVICE_TREE_PATH=$(find "$OUTPUT_DIR" -mindepth 2 -maxdepth 2 -type d -print0 | xargs -0 ls -td | head -n1)
           
           if [ -z "$DEVICE_TREE_PATH" ]; then
@@ -158,7 +165,6 @@ jobs:
           
           echo "找到设备树目录：${DEVICE_TREE_PATH}"
           
-          # 创建临时目录并复制文件
           TEMP_DIR=$(mktemp -d)
           cp -r "${DEVICE_TREE_PATH}/." "$TEMP_DIR/"
           
